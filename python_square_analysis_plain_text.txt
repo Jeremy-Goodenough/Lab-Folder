@@ -1,0 +1,103 @@
+import cv2
+
+# Conversion ratio: 185 pixels = 3.1 mm
+CONVERSION_FACTOR = 3.1 / 185
+# Time between images (in seconds) (1/5000)
+TIME_BETWEEN_IMAGES = 1.958e-4
+
+def detect_squares(image_path):
+    # Read the image
+    image = cv2.imread(image_path)
+
+    # Convert the image to the HSV color space
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # Define the lower and upper bounds of the red color (adjust as needed)
+    lower_red = (0, 100, 100)
+    upper_red = (10, 255, 255)
+
+    # Threshold the HSV image to get only red colors
+    mask = cv2.inRange(hsv, lower_red, upper_red)
+
+    # Find contours in the mask
+    contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Initialize area and vertical_midpoint with default values
+    area = 0
+    vertical_midpoint = 0
+    square_detected = False
+    for contour in contours:
+        # Approximate the contour to a polygon
+        approx = cv2.approxPolyDP(contour, 0.03 * cv2.arcLength(contour, True), True)
+
+        # If the contour has four vertices, it's likely a square
+        if len(approx) == 4:
+            # Calculate dimensions of the bounding rectangle
+            x, y, w, h = cv2.boundingRect(approx)
+
+            # Filter out small squares
+            min_area = 100  # Adjust as needed
+            if w * h < min_area:
+                continue
+
+            # Calculate area of the square (in mm²)
+            area = w * h * CONVERSION_FACTOR ** 2
+
+            # Calculate vertical axis midpoint of the square (in mm)
+            vertical_midpoint = (y + y + h) * 0.5 * CONVERSION_FACTOR
+
+            # Print results
+            print("Image", image_path, "dimensions (Width, Height):", image.shape[1], ",", image.shape[0])
+            print("Detected square dimensions (Width, Height):", w * CONVERSION_FACTOR, "mm,", h * CONVERSION_FACTOR, "mm")
+            print("Area of the square:", area, "mm²")
+            print("Vertical axis midpoint of the square:", vertical_midpoint, "mm")
+            print()  # Add an empty line for better readability
+            square_detected = True
+            break
+
+    if not square_detected:
+        print("Image", image_path, "No square detected.")
+    
+    return area, vertical_midpoint
+
+# Input 6 image paths
+image_paths = [
+    "image_path_1",
+    "image_path_2",
+    "image_path_3",
+    "image_path_4",
+    "image_path_5",
+    "image_path_6"
+]
+
+# Process each image and collect area and vertical axis midpoint values
+areas = []
+vertical_midpoints = []
+for idx, image_path in enumerate(image_paths, start=1):
+    print("Processing Image", idx)
+    area, vertical_midpoint = detect_squares(image_path)
+    areas.append(area)
+    vertical_midpoints.append(vertical_midpoint)
+
+# Calculate speeds between sequential images
+speeds = []
+for i in range(len(vertical_midpoints) - 1):
+    distance = abs(vertical_midpoints[i + 1] - vertical_midpoints[i])
+    speed = distance / TIME_BETWEEN_IMAGES  # Change to frame time
+    if speed >= 0:  # Ensure non-negative speed
+        speeds.append(speed)
+
+# Calculate the average speed
+average_speed = sum(speeds) / len(speeds) if len(speeds) > 0 else 0
+
+# Output comma-separated lists of areas, vertical axis midpoint values, and speeds
+area_output_str = ", ".join(str(area) for area in areas)
+print("Areas (mm²):", area_output_str)
+
+midpoint_output_str = ", ".join(str(midpoint) for midpoint in vertical_midpoints)
+print("Vertical axis midpoint outputs (mm):", midpoint_output_str)
+
+speed_output_str = ", ".join(str(speed) for speed in speeds)
+print("Speeds (mm/s) between sequential images:", speed_output_str)
+
+print("Average Speed (mm/s):", average_speed)
